@@ -39,47 +39,52 @@ config = {
 port runTask : Task ElmFire.Error (Task ElmFire.Error ())
 port runTask = task
 
-type alias Model = String
-type alias FirebaseModel = Dict String HabitRecord
+type alias Model = Dict String HabitRecord
 
-startModel = "Waiting..."
+startModel = Dict.empty
 
 model : Signal Model
 model =
   -- in a real app this foldp would likely be more complicated, using Signal.merge
   -- to combine signals such as user actions.
-  -- Signal.map converts a Signal FirebaseModel -> Signal Action
+  -- Signal.map converts a Signal Model -> Signal Action
   Signal.foldp update startModel (Signal.map ServerUpdate serverValue)
 
 -- in a real app, all actions including user actions could be modeled by this Action
 -- type that gets passed to the update function
 type Action =
   NoOp
-  | ServerUpdate FirebaseModel
+  | ServerUpdate Model
 
 update : Action -> Model -> Model
 update action model =
-  let
-    -- dictionary reducer function; concatenate key-value list
-    showCheckins : List (String, String) -> String
-    showCheckins checkins =
-      List.foldl (\(dateString, color) accum -> accum ++ ", " ++ dateString ++ "=" ++  color) "" checkins
+  case action of
+    NoOp -> model
+    ServerUpdate newModel -> newModel
 
-    showRecord habitRecord =
-      "Decay Rate: " ++ (toString habitRecord.decayRate) ++ ". " ++ showCheckins habitRecord.checkins
+viewCheckin : (String, String) -> Html
+viewCheckin (dateString, color) =
+  li [] [
+    text <| dateString ++ ": ",
+    b [] [ text color ]
+  ]
 
-    reduceModelToString label habitRecord accum =
-      case accum of
-        "" -> label ++ ": " ++ (showRecord habitRecord)
-        _ -> accum ++ ", " ++ label ++ ": " ++ (showRecord habitRecord)
-  in
-    case action of
-      NoOp -> model
-      ServerUpdate dict -> Dict.foldl reduceModelToString "" dict
+viewHabitRecord : HabitRecord -> Html
+viewHabitRecord { checkins, decayRate } =
+  div [] [
+    p [] [ text <| "Decay Rate: " ++ toString decayRate ],
+    ul [] <| List.map viewCheckin checkins
+  ]
 
 view : Model -> Html
-view value =
-  p [] [ text value ]
+view model =
+  ul [] <| List.map
+    (\(label, habitRecord) -> li [] [
+      h1 [] [ text label ],
+      viewHabitRecord habitRecord
+    ])
+    <| Dict.toList model
+
 
 main : Signal Html
 main =
